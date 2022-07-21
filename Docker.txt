@@ -1,0 +1,211 @@
+=========== Docker Installation ========
+
+CentOS:
+
+1. Setup the Docker CE Repo
+
+$ yum install -y yum-utils
+$yum-config-manager --add-repo https://download/docker.com/linux/centos/docker-ce.repo
+
+2. Installing the Docker Package
+
+$ yum -y install docker-ce
+$ service start docker (or) systemctl start docker
+
+3. First steps with Docker
+
+$ docker info
+$ docker run -i-t ubuntu /bin/bash
+	%hostname
+	%cat /etc/hosts
+	%ps -aux
+	%apt-get install vim (dpkg -l | grep vim) 
+	%exit
+
+4. Container Commands
+
+$ docker run --name KpContainer -it ubuntu /bin/bash - Naming a container
+$ docker start KpContainer - Starting a stopped container
+$ docker attach KpContainer - Attaching a container
+$ docker run --name kpContainer -d ubuntu /bin/sh -c "while true; do echo Hello World; sleep 1; done" - Creating daemonized containers
+$ docker logs -f KpContainer - Fetch logs of a container
+
+$ docker stop KpContainer
+$ docker ps -a/-q (All containers/only Container id)
+
+$ docker rm KpContainer - Deleting a Container
+$ docker rename <src> <dest>
+$ docker images - Shows current images
+$ docker search ubuntu - Search for images
+$ docker pull ubuntu:18.1 - Downloads the image
+
+5. Inspect a Container	
+
+$ docker top KpContainer - Inspecting container's process
+$ docker inspect <containerid>
+$ docker inspect --format '{{.NetworkSettings.IPAddress}}' <container id>
+$ docker inspect --format '{{.State.Running}}' <containerid>
+
+6. Run a command in a running container w/o attaching to it
+
+$ docker exec <contid>
+$ docker exec KpCont hostname
+$ docker exec -d KpCont ls
+$ docker exec <contid> apt-get update or apt-get install -y apache2
+
+7. Display a live stream of containers resource usage stats
+$ docker events
+
+8. get real time events from the server
+
+$ docker events --filter contid|event|image|label|type|volume|network|daemon
+$ docker events --filter event=attach --filter event=die
+$ docker events --since '1h'
+
+9. Exposing our containers with port redirects
+	* All ports are private by default
+	* When you docker run -p <portNo> ..., that port becomes public
+	* When you docker run -p ... (w/o port No), All ports declared with EXPOSE become public
+
+$ docker image pull jenkins/jenkins:lts
+$ docker volume create [YOUR VOLUME]
+$ docker container run -d -p 8082:8080 -v jenkinsvol1:/var/jenkins_home --name jenkins-local jenkins/jenkins:lts
+$ docker container exec [CONTAINER ID or NAME] sh -c "cat /var/jenkins_home/secrets/initialAdminPassword" (Open custom port 8082 in EC2-SG)
+
+
+10. DATA VOLUMES
+
+	* A volume is a specifically designated directory within one or more containers that bypasses the UFS (union File System)
+	* Volumes can be shared and reused b/w containers.
+	* A container doesn't have to be running to share its volumes.
+	* Changes to a volume are made directly.
+	* Changes to a volume will not be included when you update an image.
+	* Volumes persist until no containers use them.
+
+* Volumes declared from cmd-line
+
+$ docker run -it -v /usr/data ubuntu
+	- sharing Volumes across containers [Data Containers]
+	- This is done using the --volumes-from flag for docekr run.
+
+$ docker run --name VolCont -it -v /usr/data ubuntu /bin/bash
+$ docker run -- name Demo -it --volumes-from VolCont --privileged=true ubuntu /bin/bash
+
+* Sharing a directory b/w the host and a container
+
+$ docker run -it --name test1 -v /home/user/Docker:/data ubuntu
+
+
+
+11. Building Images Interactively
+
+* Create a new docker container and make some changes
+	$ docker run --name KpCont -it -ubuntu
+	$ apt-get install vim
+	$ exit
+
+* Inspect the changes
+	$ docker diff KpCont
+
+* Commit your container and create the image
+	$ docker commit KpCont
+	$ docker commit kpCont MyFirstImage
+	$ docker run -it <newImageid>
+
+* Tagging images
+	$ docker tag <newimageid> MyFirstImage
+
+
+12. DOCKER FILE
+
+Attributes:
+
+	1. FROM - Image Name (ubuntu/alpine)
+	2. MAINTAINER - Owner Name (Harish)
+	3. RUN - Run the command when the container is being built. echo "Hello World"
+	4. CMD - Specifies the command to run when a container is launched, if values are specified during launch it will override the Dockerfile values.
+
+		% CMD ["echo","Hi"]
+		$ docker build -rm -t="kp/dockerfiles"
+		$ docker run -it kp/dockerfiles
+
+	5. ENTRYPOINT - Same as RUN, arguments we specify on the docker run command line will be passed as args to the command specified in the ENTRYPOINT.
+
+		% ENTRYPOINT ["echo","Hi"]  
+
+	6. WORKDIR - Provides a way to set the working directory for the container and the ENTRYPOINT and/or CMD to be executed when a container is launched from the image.
+
+		% WORKDIR /usr/bin
+				- you can override the working directory at runtime with the -w flag
+		$ docker run -it -w /var kp/dockerfiles
+
+	7. ENV - Set environment variable during the image build process.
+		% ENV ORACLE_HOME/var
+
+	8. USER - Specifies a user that the image should be run as
+		% USER nobody
+
+		- You can override this at runtime by specifying the -u flag with $ docker run -it -u root kp/dockerfile
+
+	9. VOLUME - To add or utilise the volumes
+		
+		% VOLUME ["/data"]
+	
+	10. COPY - Adds files and directories from our build environment into our image.
+
+		% COPY readme /data
+		- This will add the readme file from the build dir to /data in the image.
+
+	11. ADD - It is similar to COPY, Whereas it can extract archives. 
+
+		% ADD latest.tar.gz /var/www/wordpress
+
+	12. EXPOSE - Tells the Docker what ports are to be published in the image.
+
+		% EXPOSE 8080
+Storing the images - 1. Local machine, 2. Registry, 3. Docker Hub
+
+
+============= DockerFile ==============		
+
+(Installing the Tomcat on centos)
+
+1. Pulling centos image from dockerhub.		- 	FROM
+2. Install Java						-	RUN
+3. Create /opt/tomcat					-	RUN
+4. change workdir to /opt/tomcat			-	WORKDIR
+5. Download Tomcat					-	ADD/RUN
+6. Extract the package					-	RUN
+7. Rename tomcat dir					-	RUN
+8. tell Docker that it runs on port 8080		-	EXPOSE
+9. start the tomcat services				-	CMD
+
+
+
+FROM ubuntu
+RUN apt-get update
+RUN apt-get install default-jdk -y
+RUN mkdir /opt/tomcat
+WORKDIR /opt/tomcat
+ADD https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.65/bin/apache-tomcat-9.0.65.tar.gz .
+RUN tar -xvzf apache-tomcat-9.0.65.tar.gz
+RUN mv apache-tomcat-9.0.65/* /opt/tomcat
+EXPOSE 8080
+CMD ["/opt/tomcat/bin/catalina.sh","run"]
+
+
+Now build the docker file - docker build -t kptomcat .
+
+check the docker images - kptomcat
+
+Now run a container - docker run -d --name kptomcon -p 8082:8080 kptomcat
+
+check the docker containers - docker ps -a
+
+Now test the webserver - Publicip:8082
+
+* Now download any webapp.war file in your local(EC2) and copy into /tomcat/webapps of a docker container to deploy the war file.
+	- COPY ./webapp.war/ /opt/tomcat/webapps
+	
+
+
